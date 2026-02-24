@@ -8,9 +8,10 @@ from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
 # 导入你自定义的 Wrapper 和 Policy
-from graph_obs_wrapper import PaddedGraphObsWrapper
+from graph_obs_wrapper import PaddedGraphObsWrapper, PaddedActionWrapper
 from masked_graph_policy import MaskedGraphSACPolicy
 
+print(f"testing train graph ppo.py")
 XML_FILE = "./gymnasium_env/envs/reacher_2j.xml"  # 使用你修改好物理参数的 XML
 env_name = "gymnasium_env/Reacher2D-v0"
 max_episode_steps = 100
@@ -25,6 +26,7 @@ def make_env(render_mode=None):
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env = Monitor(env)
         env = PaddedGraphObsWrapper(env, max_joints=10) # 包装环境！
+        env = PaddedActionWrapper(env, max_joints=10, n_arm_joints=2)
         return env
     return _init
 
@@ -58,7 +60,7 @@ model = SAC(
     buffer_size=100_000,   # SAC 经验回放池
     batch_size=256,        # 🚀 增大 Batch Size 以稳定 Transformer 的梯度
     ent_coef="auto",       # 自动调节熵，鼓励探索
-    target_entropy=-2.0,
+    # target_entropy=-2.0,
     gamma=0.99,
     tau=0.005,
     tensorboard_log=tb_log,

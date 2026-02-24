@@ -1,0 +1,7 @@
+gymnasium
+mujoco
+numpy
+pygame
+stable_baselines3
+torch
+wandb
