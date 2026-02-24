@@ -11,6 +11,18 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from graph_obs_wrapper import PaddedGraphObsWrapper, PaddedActionWrapper
 from masked_graph_policy import MaskedGraphSACPolicy
 
+import torch
+
+# 检测是否支持 Mac 的 GPU (MPS) 或 N卡的 GPU (CUDA)
+if torch.backends.mps.is_available():
+    device = "mps"
+elif torch.cuda.is_available():
+    device = "cuda"
+else:
+    device = "cpu"
+
+print(f"🔥 当前使用的计算设备: {device.upper()}")
+
 print(f"testing train graph ppo.py")
 XML_FILE = "./gymnasium_env/envs/reacher_2j.xml"  # 使用你修改好物理参数的 XML
 env_name = "gymnasium_env/Reacher2D-v0"
@@ -66,6 +78,7 @@ model = SAC(
     tensorboard_log=tb_log,
     verbose=1,
     seed=seed,
+    device=device
 )
 
 print("开始使用 Transformer SAC 训练...")
