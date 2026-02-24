@@ -1,7 +1,9 @@
+imageio
 gymnasium
 mujoco
 numpy
 pygame
 stable_baselines3
 torch
+tensorboard
 wandb
