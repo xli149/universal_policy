@@ -10,9 +10,7 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self, xml_file, frame_skip, **kwargs)
         
         # 定义一个简单的 Box，仅用于通过 MujocoEnv 的基类校验
-        # 实际的 Dict 空间由 Wrapper 定义
         dummy_space = Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64)
-        
         MujocoEnv.__init__(self, xml_file, frame_skip, observation_space=dummy_space, **kwargs)
 
         self.max_joints = 10
@@ -29,19 +27,14 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         observation = self._get_obs()
         reward, reward_info = self._get_rew(actual_action)
         
-        dist = self._get_dist()
+        # ✅ 核心改变：彻底剔除 "+10 悬停奖金"！
+        # 官方 v5 根本没有成功奖金，只有“没碰到球时的扣分”。
+        # 它必须为了【少扣分】而拼命飞向红球，并为了【不扣动作分】而安静停下。
         
-        # ✅ 核心改变 1：永远不提前 terminated！不管碰没碰到，必须干满 50 帧。
-        terminated = False 
-        
-        # ✅ 核心改变 2：“打卡工资”变成“驻留时薪”
-        # 只要手尖在红球里，【每一帧】都给 +10 分！
-        # 如果它第一秒就到了并黏住，一局能拿几百分的暴利！
-        if dist < self.success_threshold:
-            reward += 10.0 
-            
         if self.render_mode == "human": self.render()
-        return observation, reward, terminated, False, reward_info
+        
+        # 永远不提前 terminated！不管碰没碰到，必须干满 50 帧。
+        return observation, reward, False, False, reward_info
 
     def _get_dist(self):
         return np.linalg.norm(self.get_body_com("fingertip")[:2] - self.get_body_com("target")[:2])
@@ -49,20 +42,20 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
     def _get_rew(self, action):
         dist = self._get_dist()
         
-        # 距离越远，依然会有小额扣分，用来指引方向
+        # 1. 距离惩罚（最纯粹的物理指引）
         reward_dist = -dist 
         
-        # 进度奖励保留，让它在没碰到球之前能顺着气味找过去
-        reward_progress = 0.0
-        if self.prev_dist is not None:
-            reward_progress = (self.prev_dist - dist) * 10.0 
-            
-        reward_ctrl = -0.01 * np.square(action).sum()
+        # 🚨 核心改变：剔除“进度奖励”
+        # 进度奖励容易引发局部最优（来回震荡刷分），官方 v5 不需要它。
+        
+        # ✅ 核心改变：将动作惩罚放大 10 倍！（解决“电风扇疯狂转圈”的元凶）
+        # 从 -0.01 修改为 -0.1。瞎转圈会带来极其惨重的扣分！
+        reward_ctrl = -0.1 * np.square(action).sum()
 
-        # 🚨 删除了 step_penalty。不需要皮鞭了，前方的“每帧 +10 分”就是最强磁铁。
-
-        self.prev_dist = dist
-        return reward_dist + reward_progress + reward_ctrl, {"dist": dist}
+        # 最终奖励就是极简的物理反馈
+        reward = reward_dist + reward_ctrl
+        
+        return reward, {"dist": dist, "reward_dist": reward_dist, "reward_ctrl": reward_ctrl}
 
     def reset_model(self):
         qpos = self.np_random.uniform(low=-0.1, high=0.1, size=self.model.nq) + self.init_qpos
@@ -74,13 +67,11 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         qvel[-2:] = 0
         self.set_state(qpos, qvel)
         
-        # ✅ 致命 Bug 修复：每局开始前，必须把 prev_dist 设为当前的绝对初始距离！
-        # 否则进度奖励会发生极其离谱的“跨局污染”。
-        self.prev_dist = self._get_dist()
-        
+        # 🚨 剔除了 self.prev_dist，因为不再需要计算进度了。
         return self._get_obs()
 
     def _get_obs(self):
+        # 原汁原味保留，这些数据足够 Wrapper 提取相对位置了
         return {
             "qpos": self.data.qpos.flat[:self.n_joints].copy(),
             "qvel": self.data.qvel.flat[:self.n_joints].copy(),

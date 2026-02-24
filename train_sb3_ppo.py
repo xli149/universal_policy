@@ -8,17 +8,17 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
-ENV_ID = "gymnasium_env/Reacher2D-v0"
-XML_FILE = "./gymnasium_env/envs/test2.xml"
+# ENV_ID = "gymnasium_env/Reacher2D-v5"
+XML_FILE = "./gymnasium_env/envs/reacher_2j.xml"
 
-env_name =  "gymnasium_env/Reacher2D-v0"
+env_name =  "gymnasium_env/Reacher2D-v5"
 max_episode_steps = 100
-total_timesteps = int(3e6)
+total_timesteps = int(1e6)
 seed = 0
 
 def make_env(render_mode=None):
     def _init():
-        env = gym.make(env_name, xml_file=XML_FILE, render_mode=render_mode)
+        env = gym.make(env_name, xml_file = XML_FILE, render_mode=render_mode)
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env = Monitor(env)  # 记录 episode_return / episode_len 到 info 里
         return env

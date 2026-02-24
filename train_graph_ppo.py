@@ -1,45 +1,79 @@
+import os
 import gymnasium as gym
 import gymnasium_env
+from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import SAC
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
-from graph_obs_wrapper import PaddedGraphObsWrapper
-from masked_graph_policy import MaskedGraphSACPolicy # ✅ 引入新的 SAC Policy
 
-def make_env(xml_file):
+# 导入你自定义的 Wrapper 和 Policy
+from graph_obs_wrapper import PaddedGraphObsWrapper
+from masked_graph_policy import MaskedGraphSACPolicy
+
+XML_FILE = "./gymnasium_env/envs/reacher_2j.xml"  # 使用你修改好物理参数的 XML
+env_name = "gymnasium_env/Reacher2D-v0"
+max_episode_steps = 100
+total_timesteps = int(1e6)
+seed = 0
+
+def make_env(render_mode=None):
     def _init():
-        env = gym.make("gymnasium_env/Reacher2D-v0", xml_file=xml_file)
-        from gymnasium.wrappers import TimeLimit
-        env = TimeLimit(env, max_episode_steps=50)
-        env = PaddedGraphObsWrapper(env, max_joints=10)
+        # 注意：这里需要你确保底层 _get_obs 返回的是一个完整的字典，
+        # 或者直接让你的 Wrapper 处理原始的 dict。
+        env = gym.make(env_name, xml_file=XML_FILE, render_mode=render_mode)
+        env = TimeLimit(env, max_episode_steps=max_episode_steps)
+        env = Monitor(env)
+        env = PaddedGraphObsWrapper(env, max_joints=10) # 包装环境！
         return env
     return _init
 
-def train():
-    XML_2J = "/Users/chrislee/Documents/mujoco_test/gymnasium_env/envs/reacher_2j.xml"
-    
-    # SAC 通常对环境并行的依赖没有 PPO 那么重，开 4-8 个均可
-    venv = DummyVecEnv([make_env(XML_2J) for _ in range(8)])
-    venv = VecMonitor(venv)
+train_env = VecMonitor(DummyVecEnv([make_env(render_mode=None)]))
+eval_env = VecMonitor(DummyVecEnv([make_env(render_mode=None)]))
 
-    model = SAC(
-        policy=MaskedGraphSACPolicy,
-        env=venv,
-        learning_rate=3e-4,
-        buffer_size=100000,     # ✅ SAC 灵魂：经验回放池
-        batch_size=256,
-        ent_coef=0.02,        # ✅ SAC 魔法：让它自己调探索欲望！
-        gamma=0.99,
-        tau=0.005,              # 目标网络软更新
-        train_freq=1,           # 每走 1 步就拿回放池的数据训练 1 次
-        gradient_steps=1,
-        verbose=1,
-        tensorboard_log="./sac_reacher_tensorboard/"
-    )
+tb_log = os.path.join("sb3_runs", env_name, f"sac_gnn_seed{seed}")
 
-    print("🚀 Starting SAC Training...")
-    model.learn(total_timesteps=500000, log_interval=4)
-    model.save("./checkpoints/graph_reach_sac_final")
-    print(f"Model saved to ./checkpoints/graph_reach_sac_final ")
+eval_callback = EvalCallback(
+    eval_env,
+    best_model_save_path=os.path.join("sb3_checkpoints", env_name, "best_sac_gnn"),
+    log_path=os.path.join("sb3_eval_logs", env_name),
+    eval_freq=10_000,
+    n_eval_episodes=5,
+    deterministic=True,
+    render=False
+)
 
-if __name__ == "__main__":
-    train()
+ckpt_callback = CheckpointCallback(
+    save_freq=100_000,
+    save_path=os.path.join("sb3_checkpoints", env_name, "ckpt"),
+    name_prefix="sac_gnn"
+)
+
+# 使用 SAC 训练 Transformer 策略
+model = SAC(
+    policy=MaskedGraphSACPolicy,
+    # policy = "MultiInputPolicy",
+    env=train_env,
+    learning_rate=3e-4,
+    buffer_size=100_000,   # SAC 经验回放池
+    batch_size=256,        # 🚀 增大 Batch Size 以稳定 Transformer 的梯度
+    ent_coef="auto",       # 自动调节熵，鼓励探索
+    target_entropy=-2.0,
+    gamma=0.99,
+    tau=0.005,
+    tensorboard_log=tb_log,
+    verbose=1,
+    seed=seed,
+)
+
+print("开始使用 Transformer SAC 训练...")
+model.learn(
+    total_timesteps=total_timesteps,
+    callback=[eval_callback, ckpt_callback],
+    tb_log_name="SAC_GNN"
+)
+
+model.save(os.path.join("sb3_checkpoints", env_name, "final_sac_gnn_model"))
+train_env.close()
+eval_env.close()
+print("训练完成。TensorBoard logdir:", tb_log)
