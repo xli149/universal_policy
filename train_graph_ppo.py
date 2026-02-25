@@ -1,4 +1,6 @@
 import os
+import torch  # 🚀 新增：用于检测设备
+from typing import Callable  # 🚀 新增：用于定义学习率衰减
 import gymnasium as gym
 import gymnasium_env
 from gymnasium.wrappers import TimeLimit
@@ -11,33 +13,41 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from graph_obs_wrapper import PaddedGraphObsWrapper, PaddedActionWrapper
 from masked_graph_policy import MaskedGraphSACPolicy
 
-import torch
+print(f"testing train graph ppo.py")
+XML_FILE = "./gymnasium_env/envs/reacher_2j.xml"  
+env_name = "gymnasium_env/Reacher2D-v0"
+max_episode_steps = 100
+total_timesteps = int(1e6)
+seed = 0
 
-# 检测是否支持 Mac 的 GPU (MPS) 或 N卡的 GPU (CUDA)
+# ==========================================
+# 🚀 进阶技巧 1：自动检测计算设备 (MPS/CUDA/CPU)
+# ==========================================
 if torch.backends.mps.is_available():
     device = "mps"
 elif torch.cuda.is_available():
     device = "cuda"
 else:
     device = "cpu"
+print(f"\n🔥 准备使用的计算设备: {device.upper()}\n")
 
-print(f"🔥 当前使用的计算设备: {device.upper()}")
-
-print(f"testing train graph ppo.py")
-XML_FILE = "./gymnasium_env/envs/reacher_2j.xml"  # 使用你修改好物理参数的 XML
-env_name = "gymnasium_env/Reacher2D-v0"
-max_episode_steps = 100
-total_timesteps = int(1e6)
-seed = 0
+# ==========================================
+# 🚀 进阶技巧 2：定义线性学习率衰减
+# ==========================================
+def linear_schedule(initial_value: float) -> Callable[[float], float]:
+    def func(progress_remaining: float) -> float:
+        # progress_remaining 从 1.0 线性降到 0.0
+        return progress_remaining * initial_value
+    return func
 
 def make_env(render_mode=None):
     def _init():
-        # 注意：这里需要你确保底层 _get_obs 返回的是一个完整的字典，
-        # 或者直接让你的 Wrapper 处理原始的 dict。
         env = gym.make(env_name, xml_file=XML_FILE, render_mode=render_mode)
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env = Monitor(env)
-        env = PaddedGraphObsWrapper(env, max_joints=10) # 包装环境！
+        
+        # 🚀 修复隐患：PaddedGraphObsWrapper 之前漏掉了 n_arm_joints=2，必须加上！
+        env = PaddedGraphObsWrapper(env, max_joints=10, n_arm_joints=2) 
         env = PaddedActionWrapper(env, max_joints=10, n_arm_joints=2)
         return env
     return _init
@@ -63,25 +73,29 @@ ckpt_callback = CheckpointCallback(
     name_prefix="sac_gnn"
 )
 
-# 使用 SAC 训练 Transformer 策略
+# 使用 SAC 训练策略
 model = SAC(
     policy=MaskedGraphSACPolicy,
-    # policy = "MultiInputPolicy",
     env=train_env,
-    learning_rate=3e-4,
-    buffer_size=100_000,   # SAC 经验回放池
-    batch_size=256,        # 🚀 增大 Batch Size 以稳定 Transformer 的梯度
-    ent_coef="auto",       # 自动调节熵，鼓励探索
-    # target_entropy=-2.0,
+    # 🚀 进阶技巧应用：使用学习率衰减，从 3e-4 平滑降至 0，便于后期逼近极限 -3 分
+    learning_rate=linear_schedule(3e-4),
+    buffer_size=100_000,
+    batch_size=256,        
+    
+    # 🚀 进阶技巧 3：固定探索系数。舍弃 "auto"，防止熵跌到 0 导致模型摆烂
+    ent_coef=0.01,       
+    
     gamma=0.99,
     tau=0.005,
     tensorboard_log=tb_log,
     verbose=1,
     seed=seed,
-    device=device
+    
+    # 🚀 指定使用的硬件设备
+    device=device,
 )
 
-print("开始使用 Transformer SAC 训练...")
+print("开始使用 GCN SAC 训练...")
 model.learn(
     total_timesteps=total_timesteps,
     callback=[eval_callback, ckpt_callback],
