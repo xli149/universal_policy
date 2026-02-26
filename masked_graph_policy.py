@@ -23,7 +23,7 @@ class GraphConvLayer(nn.Module):
         return F.relu(out)
 
 class JointGraphGCN(nn.Module):
-    def __init__(self, node_feat_dim=5, global_feat_dim=4, max_joints=10, hidden_dim=128):
+    def __init__(self, node_feat_dim=5, global_feat_dim=4, max_joints=10, hidden_dim=256):
         super().__init__()
         self.max_joints = max_joints
         
@@ -64,7 +64,7 @@ class MaskedGraphActor(Actor):
     def __init__(self, observation_space, action_space, net_arch, features_extractor, features_dim, **kwargs):
         super().__init__(observation_space, action_space, net_arch, features_extractor, features_dim, **kwargs)
         
-        hidden_dim = 128
+        hidden_dim = 256
         self.max_j = 10
         self.node_dim = 5
         self.global_dim = 4
@@ -100,7 +100,7 @@ class MaskedGraphCritic(ContinuousCritic):
     def __init__(self, observation_space, action_space, net_arch, features_extractor, features_dim, **kwargs):
         super().__init__(observation_space, action_space, net_arch, features_extractor, features_dim, **kwargs)
         
-        hidden_dim = 128
+        hidden_dim = 256
         self.max_j = 10
         self.node_dim = 5
         self.global_dim = 4
