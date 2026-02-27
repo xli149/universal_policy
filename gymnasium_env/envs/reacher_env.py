@@ -4,7 +4,7 @@ from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
 
 class ReacherEnv(MujocoEnv, utils.EzPickle):
-    metadata = {"render_modes": ["human", "rgb_array"]}
+    metadata = {"render_modes": ["human", "rgb_array", "depth_array"]}
 
     def __init__(self, xml_file="reacher.xml", frame_skip=4, **kwargs):
         utils.EzPickle.__init__(self, xml_file, frame_skip, **kwargs)
