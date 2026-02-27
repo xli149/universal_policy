@@ -128,10 +128,10 @@ eval_callback = EvalCallback(
 model = SAC(
     policy=MaskedGraphSACPolicy,
     env=train_env,
-    learning_rate=linear_schedule(3e-4),
+    learning_rate=linear_schedule(1e-4),
     buffer_size=1_000_000, # 🚀 缓冲池加大到 100 万，容纳大千世界的数据
     batch_size=512,        # 🚀 批次加大，保证图网络有足够的梯度
-    ent_coef=0.01,       
+    ent_coef="auto",       
     gamma=0.99,
     tau=0.005,
     # ==========================================================
@@ -140,7 +140,7 @@ model = SAC(
     # 我们必须把 gradient_steps 设为 n_envs，保证收集多少步，就训练多少次！
     # ==========================================================
     train_freq=(1, "step"),
-    gradient_steps=n_envs, 
+    gradient_steps=min(n_envs, 40), 
     tensorboard_log=tb_log_dir,        
     verbose=1,
     seed=seed,
@@ -151,6 +151,7 @@ print(f"\n🚀 开始使用 GCN SAC 征服大千世界 ...")
 model.learn(
     total_timesteps=total_timesteps,
     callback=eval_callback,
+    log_interval=100,
     tb_log_name="run"                  
 )
 
