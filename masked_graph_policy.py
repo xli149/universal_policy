@@ -23,7 +23,8 @@ class GraphConvLayer(nn.Module):
         return F.relu(out)
 
 class JointGraphGCN(nn.Module):
-    def __init__(self, node_feat_dim=5, global_feat_dim=4, max_joints=10, hidden_dim=256):
+    # 🚀 修改 1：node_feat_dim 默认从 5 改为 6
+    def __init__(self, node_feat_dim=6, global_feat_dim=4, max_joints=10, hidden_dim=256):
         super().__init__()
         self.max_joints = max_joints
         
@@ -66,14 +67,24 @@ class MaskedGraphActor(Actor):
         
         hidden_dim = 256
         self.max_j = 10
-        self.node_dim = 5
+        self.node_dim = 6  # 🚀 修改 2：节点特征维度升级为 6
         self.global_dim = 4
         
         self.backbone = JointGraphGCN(self.node_dim, self.global_dim, self.max_j, hidden_dim)
         
         combined_dim = hidden_dim + self.node_dim + self.global_dim
-        self.action_mean = nn.Sequential(nn.Linear(combined_dim, 64), nn.GELU(), nn.Linear(64, 1))
-        self.action_log_std = nn.Sequential(nn.Linear(combined_dim, 64), nn.GELU(), nn.Linear(64, 1))
+        
+        # 🚀 修改 3：把 64 拓宽为 256 并加深一层，防止 10 关节复杂动作的信息瓶颈！
+        self.action_mean = nn.Sequential(
+            nn.Linear(combined_dim, 256), nn.GELU(), 
+            nn.Linear(256, 256), nn.GELU(), 
+            nn.Linear(256, 1)
+        )
+        self.action_log_std = nn.Sequential(
+            nn.Linear(combined_dim, 256), nn.GELU(), 
+            nn.Linear(256, 256), nn.GELU(), 
+            nn.Linear(256, 1)
+        )
 
     def get_action_dist_params(self, obs):
         nodes, mask, global_feat = obs["nodes"], obs["mask"].float(), obs["global"]
@@ -88,11 +99,7 @@ class MaskedGraphActor(Actor):
         log_std = self.action_log_std(combined_h).squeeze(-1)
         log_std = torch.clamp(log_std, -20, 2)
         
-        # 🚀 修改 1：只锁死均值，释放方差！
         mean = mean * mask
-        # (删除了 log_std = log_std * mask + ...) 
-        # 让假关节的 log_std 自由输出，从而喂饱 SAC 的 auto entropy 调节器
-        
         return mean, log_std, {}
 
 # 4. 定制 SAC Critic
@@ -102,7 +109,7 @@ class MaskedGraphCritic(ContinuousCritic):
         
         hidden_dim = 256
         self.max_j = 10
-        self.node_dim = 5
+        self.node_dim = 6  # 🚀 修改 4：节点特征维度升级为 6
         self.global_dim = 4
         self.action_dim = action_space.shape[0]
         
@@ -110,18 +117,21 @@ class MaskedGraphCritic(ContinuousCritic):
         for _ in range(self.n_critics):
             backbone = JointGraphGCN(self.node_dim, self.global_dim, self.max_j, hidden_dim)
             combined_dim = hidden_dim + self.node_dim + self.global_dim + self.action_dim
-            head = nn.Sequential(nn.Linear(combined_dim, 64), nn.ReLU(), nn.Linear(64, 1))
+            
+            # 🚀 修改 5：Critic 头同样拓宽为 256
+            head = nn.Sequential(
+                nn.Linear(combined_dim, 256), nn.ReLU(), 
+                nn.Linear(256, 256), nn.ReLU(), 
+                nn.Linear(256, 1)
+            )
             self.q_networks.append(nn.ModuleDict({"backbone": backbone, "head": head}))
 
     def forward(self, obs, actions):
         nodes, mask, global_feat = obs["nodes"], obs["mask"].float(), obs["global"]
         B, N, _ = nodes.shape
         
-        # 🚀 修改 2：在入口处，直接用物理手段将假动作屏蔽为 0！
-        # 告诉 Critic：“不要管假关节输出的随机数，它们全都是 0”
         masked_actions = actions * mask 
         
-        # 用 masked_actions 替代原来的 actions 进行扩展拼接
         actions_expanded = masked_actions.unsqueeze(1).expand(B, N, -1)
         global_expanded = global_feat.unsqueeze(1).expand(B, N, -1)
         

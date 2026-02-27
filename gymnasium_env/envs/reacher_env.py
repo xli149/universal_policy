@@ -6,7 +6,7 @@ from gymnasium.spaces import Box
 class ReacherEnv(MujocoEnv, utils.EzPickle):
     metadata = {"render_modes": ["human", "rgb_array"]}
 
-    def __init__(self, xml_file="reacher.xml", frame_skip=2, **kwargs):
+    def __init__(self, xml_file="reacher.xml", frame_skip=4, **kwargs):
         utils.EzPickle.__init__(self, xml_file, frame_skip, **kwargs)
         
         # 定义一个简单的 Box，仅用于通过 MujocoEnv 的基类校验

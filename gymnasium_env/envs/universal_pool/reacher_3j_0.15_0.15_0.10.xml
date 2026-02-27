@@ -1,0 +1,45 @@
+<mujoco model="reacher_3j_0.15_0.15_0.10">
+  <compiler angle="radian" inertiafromgeom="true"/>
+  <default>
+    <joint armature="1" damping="1" limited="true"/>
+    <geom contype="1" conaffinity="1" friction="1 0.1 0.1" rgba="0.7 0.7 0 1" density="1000"/>
+  </default>
+  <option gravity="0 0 -9.81" integrator="RK4" timestep="0.005"/>
+  <worldbody>
+    <geom conaffinity="0" contype="0" name="ground" pos="0 0 0" rgba="0.9 0.9 0.9 1" size="0.54 0.54 10" type="plane"/>
+    <geom conaffinity="0" contype="0" name="sideS" rgba="0.9 0.4 0.6 1" size="0.02" type="capsule" fromto="-0.54 -0.54 .01 0.54 -0.54 .01"/>
+    <geom conaffinity="0" contype="0" name="sideE" rgba="0.9 0.4 0.6 1" size="0.02" type="capsule" fromto="0.54 -0.54 .01 0.54 0.54 .01"/>
+    <geom conaffinity="0" contype="0" name="sideN" rgba="0.9 0.4 0.6 1" size="0.02" type="capsule" fromto="-0.54 0.54 .01 0.54 0.54 .01"/>
+    <geom conaffinity="0" contype="0" name="sideW" rgba="0.9 0.4 0.6 1" size="0.02" type="capsule" fromto="-0.54 -0.54 .01 -0.54 0.54 .01"/>
+    <geom conaffinity="0" contype="0" name="root" rgba="0.9 0.4 0.6 1" size=".011" type="cylinder" fromto="0 0 0 0 0 0.02"/>
+    <body name="body0" pos="0 0 0.01">
+      <geom name="link0" type="capsule" size="0.015" rgba="0.0 0.4 0.6 1" fromto="0 0 0 0.15 0 0" margin="0.005"/>
+      <joint name="joint0" type="hinge" pos="0 0 0" axis="0 0 1" limited="false"/>
+      <geom name="joint_guard_0" type="sphere" size="0.02" rgba="1 0 0 1" pos="0 0 0" contype="1" conaffinity="1" margin="0.002"/>
+      <body name="body1" pos="0.15 0 0">
+      <geom name="link1" type="capsule" size="0.015" rgba="0.0 0.4 0.6 1" fromto="0 0 0 0.15 0 0" margin="0.005"/>
+      <joint name="joint1" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-2.2 2.2"/>
+      <geom name="joint_guard_1" type="sphere" size="0.02" rgba="1 0 0 1" pos="0 0 0" contype="1" conaffinity="1" margin="0.002"/>
+      <body name="body2" pos="0.15 0 0">
+      <geom name="link2" type="capsule" size="0.015" rgba="0.0 0.4 0.6 1" fromto="0 0 0 0.1 0 0" margin="0.005"/>
+      <joint name="joint2" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-2.2 2.2"/>
+      <geom name="joint_guard_2" type="sphere" size="0.02" rgba="1 0 0 1" pos="0 0 0" contype="1" conaffinity="1" margin="0.002"/>
+      <body name="fingertip" pos="0.1 0 0">
+        <geom name="fingertip_col" type="sphere" size="0.02" rgba="0 0 0 0" pos="0 0 0" contype="1" conaffinity="1" margin="0.002"/>
+        <geom name="fingertip_vis" type="sphere" size="0.01" rgba="0.0 0.8 0.6 1" pos="0 0 0" contype="0" conaffinity="0"/>
+      </body>
+    </body>
+    </body>
+    </body>
+    <body name="target" pos="0.1 -0.1 0.01">
+      <joint name="target_x" type="slide" axis="1 0 0" limited="true" range="-0.36000000000000004 0.36000000000000004" ref="0.1" damping="0" armature="0" stiffness="0"/>
+      <joint name="target_y" type="slide" axis="0 1 0" limited="true" range="-0.36000000000000004 0.36000000000000004" ref="-0.1" damping="0" armature="0" stiffness="0"/>
+      <geom name="target" type="sphere" size="0.02" rgba="0.9 0.2 0.2 1" pos="0 0 0" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor joint="joint0" ctrllimited="true" ctrlrange="-1.0 1.0" gear="40.0"/>
+    <motor joint="joint1" ctrllimited="true" ctrlrange="-1.0 1.0" gear="40.0"/>
+    <motor joint="joint2" ctrllimited="true" ctrlrange="-1.0 1.0" gear="40.0"/>
+  </actuator>
+</mujoco>

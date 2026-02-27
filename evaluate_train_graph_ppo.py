@@ -7,42 +7,53 @@ from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-# ✅ 修改 1：同时导入 Observation 和 Action 的 Wrapper
+# 导入自定义的 Wrapper 和 Policy
 from graph_obs_wrapper import PaddedGraphObsWrapper, PaddedActionWrapper
-
-# ✅ 修改 2：必须导入你自定义的 Policy，否则 SB3 加载模型时会找不到类！
 from masked_graph_policy import MaskedGraphSACPolicy
 
-# 确保这里的 ENV_ID 和你训练时注册的名字一致（比如 v5）
+# ==========================================
+# ⚙️ 核心配置区
+# ==========================================
 ENV_ID = "gymnasium_env/Reacher2D-v0"
 
-# ✅ 修改 3：指向你刚刚跑完的 GCN 模型路径 (不需要加 .zip 后缀)
-MODEL_PATH = "./sb3_checkpoints/gymnasium_env/Reacher2D-v0/final_sac_gnn_model" 
+# 🚀 指向你刚刚跑完的“混合训练大模型”路径
+MODEL_PATH = "./checkpoints/universal_2_to_5j/final_model" # 或者 best_model
 
-XML_POOL = [
-    "/Users/chrislee/Documents/mujoco_test/gymnasium_env/envs/reacher_2j.xml",
+# 🚀 评估测试池：让模型依次挑战 2 到 5 关节
+ENV_CONFIGS = [
+    {"xml": "./gymnasium_env/envs/reacher_2j.xml", "joints": 2},
+    {"xml": "./gymnasium_env/envs/reacher_3j.xml", "joints": 3},
+    {"xml": "./gymnasium_env/envs/reacher_4j.xml", "joints": 4},
+    {"xml": "./gymnasium_env/envs/reacher_5j.xml", "joints": 5},
 ]
 
-max_episode_steps = 100 # 保持和训练时的 max_episode_steps 一致
+max_episode_steps = 100 
 max_joints = 10
-n_arm_joints = 2        # 明确真实的机械臂关节数
 
-def make_eval_env(xml_file, render_mode="human"):
+# ==========================================
+# 动态生成环境的工厂函数
+# ==========================================
+# 🚀 修改 1：接收动态的 n_arm_joints，每次创建不同长短的手臂
+def make_eval_env(xml_file, n_arm_joints, render_mode="human"):
     def _init():
         env = gym.make(ENV_ID, xml_file=xml_file, render_mode=render_mode)
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
         
-        # ✅ 修改 4：必须双管齐下，既包装观察，又包装动作！并传入 n_arm_joints
+        # 精确贴合当前环境的关节数
         env = PaddedGraphObsWrapper(env, max_joints=max_joints, n_arm_joints=n_arm_joints)
         env = PaddedActionWrapper(env, max_joints=max_joints, n_arm_joints=n_arm_joints)
         
         return env
     return _init
 
-def eval_on_xml(model, xml_file, n_episodes=10):
-    venv = DummyVecEnv([make_eval_env(xml_file, render_mode="human")])
+# ==========================================
+# 单个环境的评估循环
+# ==========================================
+def eval_on_xml(model, xml_file, n_arm_joints, n_episodes=5):
+    # 用当前的 config 生成特定的环境
+    venv = DummyVecEnv([make_eval_env(xml_file, n_arm_joints, render_mode="human")])
     raw_env = venv.envs[0].unwrapped
-    env_success_th = float(getattr(raw_env, "success_threshold", 0.05)) # 容忍距离
+    env_success_th = float(getattr(raw_env, "success_threshold", 0.05))
 
     ep_rews, final_dists = [], []
     success_count = 0
@@ -53,13 +64,13 @@ def eval_on_xml(model, xml_file, n_episodes=10):
         ep_rew = 0.0
 
         while not done:
-            # deterministic=True 代表评估时不加入探索噪音，直接输出最优动作
+            # 🚀 GCN 开始表演：deterministic=True 直接输出当前最优策略
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done_arr, info = venv.step(action)
             ep_rew += float(reward[0])
             done = done_arr[0]
 
-        # 获取最终的指尖到目标的距离
+        # 计算最后停靠时的距离误差
         if hasattr(raw_env, "_get_dist"):
             dist = float(raw_env._get_dist())
         else:
@@ -80,26 +91,35 @@ def eval_on_xml(model, xml_file, n_episodes=10):
 
     return {
         "xml": os.path.basename(xml_file),
+        "joints": n_arm_joints,
         "ep_rew_mean": float(np.mean(ep_rews)),
         "final_dist_mean": float(np.mean(final_dists)),
         "success_rate": float(success_count / n_episodes),
     }
 
+# ==========================================
+# 主程序：遍历全宇宙
+# ==========================================
 if __name__ == "__main__":
-    # 加载模型时不需要渲染画面
-    temp_env = DummyVecEnv([make_eval_env(XML_POOL[0], render_mode=None)])
+    # 为了让 SB3 正确初始化，先用第一个配置建一个临时空壳环境（不渲染）
+    first_cfg = ENV_CONFIGS[0]
+    temp_env = DummyVecEnv([make_eval_env(first_cfg["xml"], first_cfg["joints"], render_mode=None)])
     
-    print(f"Loading model from {MODEL_PATH}...")
+    print(f"Loading Universal Model from {MODEL_PATH}...")
     model = SAC.load(MODEL_PATH, env=temp_env, device="auto")
     temp_env.close()
 
-    print("\n=== Start Evaluation ===")
-    for xml in XML_POOL:
-        print(f"\nTesting on: {os.path.basename(xml)}")
-        # 弹窗渲染评估
-        metrics = eval_on_xml(model, xml_file=xml, n_episodes=10)
+    print("\n=== Start Universal Evaluation ===")
+    
+    # 🚀 修改 2：依次遍历 2、3、4、5 关节的环境
+    for config in ENV_CONFIGS:
+        print(f"\n🎬 正在测试环境: {os.path.basename(config['xml'])} (关节数: {config['joints']})")
         
-        print("\n" + "="*30)
+        # 每个环境跑 5 局看看效果
+        metrics = eval_on_xml(model, xml_file=config["xml"], n_arm_joints=config["joints"], n_episodes=5)
+        
+        print("\n" + "="*40)
+        print(f"🏆 {config['joints']} 关节成绩单:")
         for k, v in metrics.items():
-            print(f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}")
-        print("="*30)
+            print(f"  - {k}: {v:.4f}" if isinstance(v, float) else f"  - {k}: {v}")
+        print("="*40)

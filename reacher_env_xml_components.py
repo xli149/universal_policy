@@ -1,16 +1,14 @@
 from typing import Sequence, Tuple, List
+import os
+import random
 
 def xml_header(model_name):
     return f'<mujoco model="{model_name}">\n'
 
-
 def xml_compiler(angle="radian", inertiafromgeom: bool = True):
     return f'  <compiler angle="{angle}" inertiafromgeom="{"true" if inertiafromgeom else "false"}"/>\n'
 
-
-
 def xml_default(joint_armature=1, joint_damping=1, joint_limited=True, geom_friction=(1, 0.1, 0.1), geom_rgba=(0.7,0.7,0,1), geom_density=1000):
-
     fr = " ".join(map(str, geom_friction))
     rgba = " ".join(map(str, geom_rgba))
     return(
@@ -20,11 +18,10 @@ def xml_default(joint_armature=1, joint_damping=1, joint_limited=True, geom_fric
         "  </default>\n"
     )
 
-
-def xml_option(gravity=(0,0,-9.81), integrator="RK4", timestep=0.002) -> str:
+# 🚀 核心修改 1：降低 timestep 到 0.005，让物理引擎的“视力”变好，防止高速穿模
+def xml_option(gravity=(0,0,-9.81), integrator="RK4", timestep=0.005) -> str:
     g = " ".join(map(str, gravity))
     return f'  <option gravity="{g}" integrator="{integrator}" timestep="{timestep}"/>\n'
-
 
 def xml_arena(arena_half: float = 0.45, wall_radius: float = 0.02) -> str:
     # ground plane
@@ -35,26 +32,10 @@ def xml_arena(arena_half: float = 0.45, wall_radius: float = 0.02) -> str:
         f'rgba="0.9 0.9 0.9 1" size="{arena_half} {arena_half} 10" type="plane"/>\n'
     )
     # 4 boundary capsules
-    # South
-    s.append(
-        f'    <geom conaffinity="0" contype="0" name="sideS" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" '
-        f'fromto="{-arena_half} {-arena_half} .01 {arena_half} {-arena_half} .01"/>\n'
-    )
-    # East
-    s.append(
-        f'    <geom conaffinity="0" contype="0" name="sideE" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" '
-        f'fromto="{arena_half} {-arena_half} .01 {arena_half} {arena_half} .01"/>\n'
-    )
-    # North
-    s.append(
-        f'    <geom conaffinity="0" contype="0" name="sideN" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" '
-        f'fromto="{-arena_half} {arena_half} .01 {arena_half} {arena_half} .01"/>\n'
-    )
-    # West
-    s.append(
-        f'    <geom conaffinity="0" contype="0" name="sideW" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" '
-        f'fromto="{-arena_half} {-arena_half} .01 {-arena_half} {arena_half} .01"/>\n'
-    )
+    s.append(f'    <geom conaffinity="0" contype="0" name="sideS" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" fromto="{-arena_half} {-arena_half} .01 {arena_half} {-arena_half} .01"/>\n')
+    s.append(f'    <geom conaffinity="0" contype="0" name="sideE" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" fromto="{arena_half} {-arena_half} .01 {arena_half} {arena_half} .01"/>\n')
+    s.append(f'    <geom conaffinity="0" contype="0" name="sideN" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" fromto="{-arena_half} {arena_half} .01 {arena_half} {arena_half} .01"/>\n')
+    s.append(f'    <geom conaffinity="0" contype="0" name="sideW" rgba="0.9 0.4 0.6 1" size="{wall_radius}" type="capsule" fromto="{-arena_half} {-arena_half} .01 {-arena_half} {arena_half} .01"/>\n')
     # root marker
     s.append('    <geom conaffinity="0" contype="0" name="root" rgba="0.9 0.4 0.6 1" size=".011" type="cylinder" fromto="0 0 0 0 0 0.02"/>\n')
     return "".join(s)
@@ -63,8 +44,9 @@ def xml_arm_chain(
     lengths: Sequence[float],
     link_radius: float = 0.01,
     fingertip_radius: float = 0.01,
+    joint_sphere_radius: float = 0.02, 
     joint_axis=(0, 0, 1),
-    joint_range=(-2.5, 2.5),
+    joint_range=(-1.5, 1.5),
     joint0_limited: bool = False,
     base_pos=(0, 0, 0.01),
 ) -> Tuple[str, List[str]]:
@@ -80,13 +62,13 @@ def xml_arm_chain(
     opened_bodies = 1
 
     for i, L in enumerate(lengths):
-        # link geom
+        # 🚀 核心修改 2：给连杆加上 margin="0.005"，穿上一层无形的排斥力场护盾
         s.append(
             f'      <geom name="link{i}" type="capsule" size="{link_radius}" '
-            f'rgba="0.0 0.4 0.6 1" fromto="0 0 0 {L} 0 0"/>\n'
+            f'rgba="0.0 0.4 0.6 1" fromto="0 0 0 {L} 0 0" margin="0.005"/>\n'
         )
 
-        # joint
+        # 2. joint
         jname = f"joint{i}"
         joint_names.append(jname)
 
@@ -97,21 +79,24 @@ def xml_arm_chain(
             s.append(
                 f'      <joint name="{jname}" type="hinge" pos="0 0 0" axis="{axis}" limited="true" range="{jmin} {jmax}"/>\n'
             )
+        
+        # 调试用：鲜红色的防穿模球
+        s.append(
+            f'      <geom name="joint_guard_{i}" type="sphere" size="{joint_sphere_radius}" '
+            f'rgba="1 0 0 1" pos="0 0 0" contype="1" conaffinity="1" margin="0.002"/>\n'
+        )
 
+        # 4. open next body or fingertip
         is_last = (i == len(lengths) - 1)
         if not is_last:
-            # open next body
             s.append(f'      <body name="body{i+1}" pos="{L} 0 0">\n')
             opened_bodies += 1
         else:
-            # open fingertip body and close it immediately
             s.append(f'      <body name="fingertip" pos="{L} 0 0">\n')
             s.append(
-                f'        <geom name="fingertip_col" type="sphere" size="{max(fingertip_radius, 0.015)}" '
+                f'        <geom name="fingertip_col" type="sphere" size="{max(fingertip_radius, 0.02)}" '
                 f'rgba="0 0 0 0" pos="0 0 0" contype="1" conaffinity="1" margin="0.002"/>\n'
             )
-
-            # 2) 可视球：保持你想要的半径，但不参与碰撞
             s.append(
                 f'        <geom name="fingertip_vis" type="sphere" size="{fingertip_radius}" '
                 f'rgba="0.0 0.8 0.6 1" pos="0 0 0" contype="0" conaffinity="0"/>\n'
@@ -124,12 +109,10 @@ def xml_arm_chain(
 
     return "".join(s), joint_names
 
-
-
 def xml_target(
     target_init=(0.1, -0.1, 0.01),
     target_range=0.405,
-    target_radius=0.009,
+    target_radius=0.02,
 ) -> str:
     x, y, z = target_init
     r = target_range
@@ -162,7 +145,6 @@ def build_reacher_xml(
     joint_range=(-2.5, 2.5),
     gear=100.0,
     ctrlrange=(-1.0, 1.0),
-    # 自动尺度参数（你以后只调这两个就够了）
     arena_margin: float = 1.3,
     target_ratio: float = 0.9,
 ) -> str:
@@ -170,14 +152,12 @@ def build_reacher_xml(
 
     pieces: List[str] = []
     pieces.append(xml_header(model_name))
-    pieces.append(xml_compiler())          # 已修复 bool
+    pieces.append(xml_compiler())
     pieces.append(xml_default())
     pieces.append(xml_option())
 
-    # arena 用自动算出来的 arena_half
     pieces.append(xml_arena(arena_half=arena_half))
 
-    # arm
     arm_xml, joint_names = xml_arm_chain(
         lengths=lengths,
         link_radius=link_radius,
@@ -186,7 +166,6 @@ def build_reacher_xml(
     )
     pieces.append(arm_xml)
 
-    # target 用自动算出来的 target_range
     pieces.append(xml_target(target_range=target_range))
 
     pieces.append("  </worldbody>\n")
@@ -195,76 +174,64 @@ def build_reacher_xml(
 
     return "".join(pieces)
 
-
-
 def reacher_scale(lengths: Sequence[float], arena_margin: float = 1.3, target_ratio: float = 0.9):
-    """
-    R: 最大可达半径（粗略）= sum(lengths)
-    arena_half: 边界半宽
-    target_range: 目标采样范围（建议 < R）
-    """
     R = float(sum(lengths))
     arena_half = R * arena_margin
     target_range = R * target_ratio
     return R, arena_half, target_range
 
+if __name__ == "__main__":
+    # 1. 创建专门存放通用环境池的文件夹
+    output_dir = "./gymnasium_env/envs/universal_pool"
+    os.makedirs(output_dir, exist_ok=True)
 
-# xml_str = build_reacher_xml(
-#     model_name="reacher_5j",
-#     lengths=[0.08, 0.10, 0.12, 0.10, 0.08],
-#     joint_range=(-2.5, 2.5),
-#     gear=80.0,
-#     arena_margin=1.35,
-#     target_ratio=0.9,
-# )
+    # 2. 定义变异的知识结界 (网络未来能学会插值的锚点)
+    LENGTH_OPTIONS = [0.05, 0.10, 0.15]
+    
+    # 挑战 1 到 10 关节！
+    JOINT_COUNTS = range(1, 11) 
+    
+    # 每个关节数随机抽样的变异体数量
+    SAMPLES_PER_JOINT = 20  
 
-xml_str = build_reacher_xml(
-    model_name="reacher_2j",
-    lengths=[0.12, 0.12],
-    joint_range=(-2.5, 2.5),
-    gear=80.0,
-    arena_margin=1.35,
-    target_ratio=0.9,
-)
+    total_generated = 0
+    random.seed(42)  # 固定种子保证可复现
 
+    print("🌌 开始生成 1-10 关节的大千世界 XML...")
+    
+    for num_joints in JOINT_COUNTS:
+        unique_combinations = set()
+        
+        # 对于1关节只有3种可能，防止死循环
+        max_possible = len(LENGTH_OPTIONS) ** num_joints
+        target_samples = min(SAMPLES_PER_JOINT, max_possible)
+        
+        while len(unique_combinations) < target_samples:
+            combo = tuple(random.choices(LENGTH_OPTIONS, k=num_joints))
+            unique_combinations.add(combo)
+            
+        for lengths in unique_combinations:
+            lengths_str = "_".join([f"{l:.2f}" for l in lengths])
+            model_name = f"reacher_{num_joints}j_{lengths_str}"
+            file_path = os.path.join(output_dir, f"{model_name}.xml")
+            
+            xml_str = build_reacher_xml(
+                model_name=model_name,
+                lengths=lengths,
+                link_radius=0.015,
+                joint_range=(-2.2, 2.2), # 🚀 核心修改 3：收紧角度，防止过度折叠
+                gear=40.0,               # 🚀 核心修改 4：稍微降低马力，防止速度过快引发隧穿
+                arena_margin=1.35,  
+                target_ratio=0.9,
+            )
+            
+            with open(file_path, "w") as f:
+                f.write(xml_str)
+            
+            total_generated += 1
+            
+        print(f"✅ {num_joints:02d} 关节组: 成功生成 {len(unique_combinations):02d} 个变异形态")
 
-
-with open("reacher_2j.xml", "w") as f:
-    f.write(xml_str)
-
-
-xml_str = build_reacher_xml(
-    model_name="reacher_3j",
-    lengths=[0.08, 0.08, 0.08],
-    joint_range=(-2.5, 2.5),
-    gear=80.0,
-    arena_margin=1.35,
-    target_ratio=0.9,
-)
-
-with open("reacher_3j.xml", "w") as f:
-    f.write(xml_str)
-
-
-xml_str = build_reacher_xml(
-    model_name="reacher_4j",
-    lengths=[0.06, 0.06, 0.06, 0.06],
-    joint_range=(-2.5, 2.5),
-    gear=80.0,
-    arena_margin=1.35,
-    target_ratio=0.9,
-)
-
-with open("reacher_4j.xml", "w") as f:
-    f.write(xml_str)
-
-
-
-
-
-
-# print(f"{xml_str}")
-
-
-
-
+    print("="*40)
+    print(f"🎉 大功告成！成功生成 {total_generated} 个绝不穿模的 XML 环境！")
+    print(f"它们被统一保存在: {output_dir}")
