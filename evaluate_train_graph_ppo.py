@@ -16,15 +16,15 @@ from masked_graph_policy import MaskedGraphSACPolicy
 # ==========================================
 ENV_ID = "gymnasium_env/Reacher2D-v0"
 
-# 🚀 指向你刚刚跑完的“混合训练大模型”路径
-MODEL_PATH = "./checkpoints/universal_2_to_5j/final_model" # 或者 best_model
+# 🚀 目标锁定：指向刚刚炼成的“学前班基础大脑”
+MODEL_PATH = "./checkpoints/pretrained_base_brain_v1/pretrained_base_brain" 
 
-# 🚀 评估测试池：让模型依次挑战 2 到 5 关节
+# 🚀 评估测试池：严格对齐训练时的 1、2、3 关节标准形态
+POOL_DIR = "./gymnasium_env/envs/universal_pool"
 ENV_CONFIGS = [
-    {"xml": "./gymnasium_env/envs/reacher_2j.xml", "joints": 2},
-    {"xml": "./gymnasium_env/envs/reacher_3j.xml", "joints": 3},
-    {"xml": "./gymnasium_env/envs/reacher_4j.xml", "joints": 4},
-    {"xml": "./gymnasium_env/envs/reacher_5j.xml", "joints": 5},
+    {"xml": os.path.join(POOL_DIR, "reacher_1j_0.10.xml"), "joints": 1},
+    {"xml": os.path.join(POOL_DIR, "reacher_2j_0.10_0.10.xml"), "joints": 2},
+   {"xml": os.path.join(POOL_DIR, "reacher_4j_0.05_0.05_0.15_0.10.xml"), "joints": 4},
 ]
 
 max_episode_steps = 100 
@@ -33,16 +33,13 @@ max_joints = 10
 # ==========================================
 # 动态生成环境的工厂函数
 # ==========================================
-# 🚀 修改 1：接收动态的 n_arm_joints，每次创建不同长短的手臂
 def make_eval_env(xml_file, n_arm_joints, render_mode="human"):
     def _init():
-        env = gym.make(ENV_ID, xml_file=xml_file, render_mode=render_mode)
+        # ✅ 核心修复：必须加上 frame_skip=4，保持物理世界时钟一致！
+        env = gym.make(ENV_ID, xml_file=xml_file, render_mode=render_mode, frame_skip=4)
         env = TimeLimit(env, max_episode_steps=max_episode_steps)
-        
-        # 精确贴合当前环境的关节数
         env = PaddedGraphObsWrapper(env, max_joints=max_joints, n_arm_joints=n_arm_joints)
         env = PaddedActionWrapper(env, max_joints=max_joints, n_arm_joints=n_arm_joints)
-        
         return env
     return _init
 
@@ -50,10 +47,9 @@ def make_eval_env(xml_file, n_arm_joints, render_mode="human"):
 # 单个环境的评估循环
 # ==========================================
 def eval_on_xml(model, xml_file, n_arm_joints, n_episodes=5):
-    # 用当前的 config 生成特定的环境
     venv = DummyVecEnv([make_eval_env(xml_file, n_arm_joints, render_mode="human")])
     raw_env = venv.envs[0].unwrapped
-    env_success_th = float(getattr(raw_env, "success_threshold", 0.05))
+    env_success_th = float(getattr(raw_env, "success_threshold", 0.10)) # 统一判断阈值
 
     ep_rews, final_dists = [], []
     success_count = 0
@@ -62,30 +58,26 @@ def eval_on_xml(model, xml_file, n_arm_joints, n_episodes=5):
         obs = venv.reset() 
         done = False
         ep_rew = 0.0
+        final_ep_dist = 999.0  # 🌟 用来暂存真正的回合末尾距离
 
         while not done:
-            # 🚀 GCN 开始表演：deterministic=True 直接输出当前最优策略
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done_arr, info = venv.step(action)
             ep_rew += float(reward[0])
             done = done_arr[0]
-
-        # 计算最后停靠时的距离误差
-        if hasattr(raw_env, "_get_dist"):
-            dist = float(raw_env._get_dist())
-        else:
-            fingertip = raw_env.get_body_com("fingertip")
-            target = raw_env.get_body_com("target")
-            dist = float(np.linalg.norm(fingertip - target))
+            
+            # 🌟 修复自动重置陷阱：趁着 DummyVecEnv 重置前，把真实的最终距离截获下来！
+            if "dist" in info[0]:
+                final_ep_dist = float(info[0]["dist"])
 
         ep_rews.append(ep_rew)
-        final_dists.append(dist)
+        final_dists.append(final_ep_dist)
         
-        is_success = dist < env_success_th
+        is_success = final_ep_dist < env_success_th
         if is_success:
             success_count += 1
 
-        print(f"Episode {ep+1:02d}: Reward={ep_rew:.2f}, Final Dist={dist:.4f}, Success={is_success}")
+        print(f"Episode {ep+1:02d}: Reward={ep_rew:.2f}, Final Dist={final_ep_dist:.4f}, Success={is_success}")
 
     venv.close()
 
@@ -98,10 +90,14 @@ def eval_on_xml(model, xml_file, n_arm_joints, n_episodes=5):
     }
 
 # ==========================================
-# 主程序：遍历全宇宙
+# 主程序：验收基础大脑
 # ==========================================
 if __name__ == "__main__":
-    # 为了让 SB3 正确初始化，先用第一个配置建一个临时空壳环境（不渲染）
+    if not os.path.exists(MODEL_PATH + ".zip"):
+        print(f"🚨 致命错误: 找不到模型文件 {MODEL_PATH}.zip")
+        exit(1)
+        
+    # 为了让 SB3 正确初始化，先建一个临时空壳环境（不渲染）
     first_cfg = ENV_CONFIGS[0]
     temp_env = DummyVecEnv([make_eval_env(first_cfg["xml"], first_cfg["joints"], render_mode=None)])
     
@@ -109,13 +105,10 @@ if __name__ == "__main__":
     model = SAC.load(MODEL_PATH, env=temp_env, device="auto")
     temp_env.close()
 
-    print("\n=== Start Universal Evaluation ===")
+    print("\n=== 验收学前班基础大脑 ===")
     
-    # 🚀 修改 2：依次遍历 2、3、4、5 关节的环境
     for config in ENV_CONFIGS:
         print(f"\n🎬 正在测试环境: {os.path.basename(config['xml'])} (关节数: {config['joints']})")
-        
-        # 每个环境跑 5 局看看效果
         metrics = eval_on_xml(model, xml_file=config["xml"], n_arm_joints=config["joints"], n_episodes=5)
         
         print("\n" + "="*40)
