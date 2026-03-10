@@ -330,19 +330,19 @@ if __name__ == "__main__":
             print(f"   [💾 已存档] 霸主数据已写入化石库: {specimen_name}")
         # ==================================================
 
-        if gen % 10 == 0:
-            print(f"📺 正在开启第 {gen+1} 代霸主阅兵模式...")
-            # 使用 render_mode="human" 创建一个临时环境跑一回合
-            eval_env_fn = make_evo_env(best_individual.lengths, render_mode="human")
-            eval_env = eval_env_fn()
+        # if gen % 10 == 0:
+        #     print(f"📺 正在开启第 {gen+1} 代霸主阅兵模式...")
+        #     # 使用 render_mode="human" 创建一个临时环境跑一回合
+        #     eval_env_fn = make_evo_env(best_individual.lengths, render_mode="human")
+        #     eval_env = eval_env_fn()
             
-            obs, _ = eval_env.reset()
-            for _ in range(MAX_EPISODE_STEPS):
-                action, _ = gcn_model.predict(obs, deterministic=True)
-                obs, reward, terminated, truncated, _ = eval_env.step(action)
-                time.sleep(0.02) # 让动作慢下来，接近 50FPS 的视觉效果
-                if terminated or truncated: break
-            eval_env.close()
+        #     obs, _ = eval_env.reset()
+        #     for _ in range(MAX_EPISODE_STEPS):
+        #         action, _ = gcn_model.predict(obs, deterministic=True)
+        #         obs, reward, terminated, truncated, _ = eval_env.step(action)
+        #         time.sleep(0.02) # 让动作慢下来，接近 50FPS 的视觉效果
+        #         if terminated or truncated: break
+        #     eval_env.close()
 
         print(f"⚡ 触发内环共同进化：大脑开始在线轮流适应新一代精锐...")
         env_fns = [make_evo_env(elite.lengths) for elite in elites]
