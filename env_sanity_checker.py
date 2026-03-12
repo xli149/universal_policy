@@ -5,6 +5,7 @@ import mujoco.viewer
 import time
 import numpy as np
 
+# 测试用例：从极短到极长
 test_cases = [
     [0.1],                       # 1关节，极短
     [0.1, 0.1, 0.1],             # 3关节，标准
@@ -12,20 +13,20 @@ test_cases = [
     [0.05] * 10                  # 10关节，极细长蛇
 ]
 
-print("=== 🌍 创世环境合理性检查 & 可视化 ===\n")
+print("=== 🌍 创世环境（避障版）合理性检查 & 可视化 ===\n")
 
 for i, lengths in enumerate(test_cases):
     n_j = len(lengths)
     
-    # 🚀 核心修改：调用最新的模块化造物主，注入物理防爆护盾！
+    # 调用最新的造物主，里面现在包含了那根绿色的柱子！
     xml_str = build_reacher_xml(
         model_name=f"test_case_{n_j}j",
         lengths=lengths,
         link_radius=0.015,
-        joint_range=(-2.2, 2.2), # 防止死锁
-        gear=40.0,               # 降低马力
-        arena_margin=1.35,  
-        target_ratio=0.9,
+        joint_range=(-2.2, 2.2),
+        gear=40.0,               
+        # arena_margin=1.35,  
+        # target_ratio=0.9,
     )
     
     try:
@@ -33,39 +34,32 @@ for i, lengths in enumerate(test_cases):
         model = mujoco.MjModel.from_xml_string(xml_str)
         data = mujoco.MjData(model)
         arm_len = sum(lengths)
-        # target_x 的范围在倒数第二个关节
         target_range = model.jnt_range[-2][1] 
         
         print(f"🎬 Case {i+1} [{n_j} 关节]:")
         print(f"   - 总臂长: {arm_len:.2f}m")
         print(f"   - 目标球活动半径: {target_range:.2f}m")
-        
-        # 逻辑判定
-        if target_range <= arm_len:
-            status = "✅ 目标可达"
-        else:
-            status = "❌ 警告：目标超出手臂极限"
-        print(f"   - 状态: {status}")
+        print(f"   - 状态: {'✅ 目标可达' if target_range <= arm_len else '❌ 警告：目标超出手臂极限'}")
 
         # 2. 物理可视化渲染
-        print(f"   - [渲染中] 请观察弹出窗口 (3秒后自动切换下一个)...")
+        print(f"   - [渲染中] 请寻找绿色的【叹息之柱】并观察碰撞 (5秒后自动切换)...")
         
         with mujoco.viewer.launch_passive(model, data) as viewer:
-            # 渲染起始位置
             mujoco.mj_forward(model, data)
             
             start_time = time.time()
-            while viewer.is_running() and (time.time() - start_time < 3.0):
+            # 延长时间到 5 秒，让你看清碰撞
+            while viewer.is_running() and (time.time() - start_time < 5.0):
                 step_start = time.time()
                 
-                # 让机械臂像章鱼一样动一动，方便观察关节连接是否正常
-                # 给每个电机一个正弦波信号
-                data.ctrl[:] = 0.5 * np.sin(time.time() * 3 + np.arange(n_j))
+                # 🚀 加大挥舞力度！强迫它向右上方（柱子所在方向）扫荡
+                # 用 cos 和 sin 的组合让它在场子里疯狂甩动
+                wave = np.sin(time.time() * 5 + np.arange(n_j))
+                data.ctrl[:] = 1.0 * wave 
                 
                 mujoco.mj_step(model, data)
                 viewer.sync()
                 
-                # 控制渲染帧率
                 time_until_next_step = model.opt.timestep - (time.time() - step_start)
                 if time_until_next_step > 0:
                     time.sleep(time_until_next_step)

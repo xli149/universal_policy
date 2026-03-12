@@ -28,22 +28,25 @@ for i in range(TEST_ROUNDS):
         link_radius=0.015,
         joint_range=(-2.2, 2.2),
         gear=40.0,
-        arena_margin=1.35,
-        target_ratio=0.9,
+        # arena_margin=1.35,
+        # target_ratio=0.9,
     )
     
     try:
-        # 4. 核心大考：不渲染，但让物理引擎强行解析并演算一步！
+        # 4. 核心大考：不渲染，但让物理引擎强行解析！
         model = mujoco.MjModel.from_xml_string(xml_str)
         data = mujoco.MjData(model)
-        mujoco.mj_step(model, data)  # 演算一步，检查是否会因为穿模导致算力爆炸
+        
+        # 🚀 暴走模式：给每个关节注入随机疯狂的扭矩，连续演算 10 步！
+        # 强迫它发生剧烈的物理位移，测试是否会因为穿模导致算力爆炸
+        for _ in range(10):
+            data.ctrl[:] = [random.uniform(-1.0, 1.0) for _ in range(n_j)]
+            mujoco.mj_step(model, data) 
+            
         success_count += 1
     except Exception as e:
         # 如果报错，先换行，免得覆盖了进度条
         print(f"\n\n🚨 抓到致盲 Bug！")
-        print(f"💥 死亡基因: {lengths}")
-        print(f"💥 报错信息: {e}")
-        break
 
 print(f"\n\n✅ 测试结束！存活率: {success_count} / {TEST_ROUNDS}")
 if success_count == TEST_ROUNDS:

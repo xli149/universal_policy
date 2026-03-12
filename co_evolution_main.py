@@ -152,6 +152,87 @@ def xml_target(target_range=0.405, target_radius=0.02) -> str:
         f'      <geom name="target" type="sphere" size="{target_radius}" rgba="0.9 0.2 0.2 1" pos="0 0 0" contype="0" conaffinity="0"/>\n'
         f'    </body>\n'
     )
+
+def xml_obstacle(pos_x, pos_y, radius=0.02) -> str:
+    # 🚧 动态位置的叹息之柱
+    return (
+        f'    <body name="obstacle" pos="{pos_x:.4f} {pos_y:.4f} 0.01">\n'
+        f'      <geom name="obstacle_geom" type="cylinder" size="{radius} 0.1" rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>\n'
+        f'    </body>\n'
+    )
+def xml_obstacle_array() -> str:
+    """☄️ 绝对坐标的环形叹息石阵"""
+    s = []
+    # 绝对坐标：柱子永远固定在距离中心 0.25m 的圆环上
+    ring_radius = 0.25
+    obs_radius = 0.025 # 固定粗细
+    
+    # 4 根柱子
+    angles = [math.pi/4, 3*math.pi/4, 5*math.pi/4, 7*math.pi/4]
+    
+    for i, angle in enumerate(angles):
+        pos_x = ring_radius * math.cos(angle)
+        pos_y = ring_radius * math.sin(angle)
+        
+        s.append(
+            f'    <body name="obstacle_{i}" pos="{pos_x:.4f} {pos_y:.4f} 0.01">\n'
+            f'      <geom name="obs_geom_{i}" type="cylinder" size="{obs_radius:.4f} 0.1" '
+            f'rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>\n'
+            f'    </body>\n'
+        )
+    return "".join(s)
+
+def build_reacher_xml(model_name: str, lengths: Sequence[float], link_radius: float = 0.015,
+                      fingertip_radius: float = 0.015, joint_range=(-2.2, 2.2), gear=40.0,
+                      ctrlrange=(-1.0, 1.0)) -> str:
+    
+    # 🌍 锁定宇宙法则：不管机械臂多长，世界不变！
+    arena_half = 0.8       # 场地固定为 0.8m 半径
+    target_range = 0.5     # 红球固定在最大 0.5m 的范围内摇号
+    
+    pieces = [
+        xml_header(model_name), xml_compiler(), xml_default(), xml_option(),
+        xml_arena(arena_half=arena_half)
+    ]
+    
+    arm_xml, joint_names = xml_arm_chain(
+        lengths=lengths, link_radius=link_radius, 
+        fingertip_radius=fingertip_radius, joint_range=joint_range
+    )
+
+    pieces.extend([
+        arm_xml, 
+        xml_target(target_range=target_range), 
+        xml_obstacle_array(), # 调用固定坐标的石阵
+        "  </worldbody>\n", 
+        xml_actuators(joint_names, ctrlrange=ctrlrange, gear=gear), 
+        "</mujoco>\n"
+    ])
+    return "".join(pieces)
+
+# def xml_obstacle_array(target_range, R) -> str:
+#     """☄️ 动态生成环形叹息石阵"""
+#     s = []
+#     # 柱子距离中心的半径，设在目标活动范围的 55% 处
+#     ring_radius = target_range * 0.55
+#     # 动态计算柱子粗细
+#     obs_radius = max(0.015, R * 0.04)
+    
+#     # 在 4 个对角线方向各种下一根柱子 (形成一个包围圈)
+#     angles = [math.pi/4, 3*math.pi/4, 5*math.pi/4, 7*math.pi/4]
+    
+#     for i, angle in enumerate(angles):
+#         pos_x = ring_radius * math.cos(angle)
+#         pos_y = ring_radius * math.sin(angle)
+        
+#         s.append(
+#             f'    <body name="obstacle_{i}" pos="{pos_x:.4f} {pos_y:.4f} 0.01">\n'
+#             f'      <geom name="obs_geom_{i}" type="cylinder" size="{obs_radius:.4f} 0.1" '
+#             f'rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>\n'
+#             f'    </body>\n'
+#         )
+#     return "".join(s)
+
 def xml_actuators(joint_names: Sequence[str], ctrlrange=(-1.0, 1.0), gear=100.0) -> str:
     c0, c1 = ctrlrange
     s = ["  <actuator>\n"]
@@ -164,17 +245,33 @@ def reacher_scale(lengths: Sequence[float], arena_margin: float = 1.3, target_ra
     R = float(sum(lengths))
     return R, R * arena_margin, R * target_ratio
 
-def build_reacher_xml(model_name: str, lengths: Sequence[float], link_radius: float = 0.01,
-                      fingertip_radius: float = 0.01, joint_range=(-2.5, 2.5), gear=100.0,
-                      ctrlrange=(-1.0, 1.0), arena_margin: float = 1.3, target_ratio: float = 0.9) -> str:
-    R, arena_half, target_range = reacher_scale(lengths, arena_margin=arena_margin, target_ratio=target_ratio)
-    pieces = [
-        xml_header(model_name), xml_compiler(), xml_default(), xml_option(),
-        xml_arena(arena_half=arena_half)
-    ]
-    arm_xml, joint_names = xml_arm_chain(lengths=lengths, link_radius=link_radius, fingertip_radius=fingertip_radius, joint_range=joint_range)
-    pieces.extend([arm_xml, xml_target(target_range=target_range), "  </worldbody>\n", xml_actuators(joint_names, ctrlrange=ctrlrange, gear=gear), "</mujoco>\n"])
-    return "".join(pieces)
+# def build_reacher_xml(model_name: str, lengths: Sequence[float], link_radius: float = 0.01,
+#                       fingertip_radius: float = 0.01, joint_range=(-2.5, 2.5), gear=100.0,
+#                       ctrlrange=(-1.0, 1.0), arena_margin: float = 1.3, target_ratio: float = 0.9) -> str:
+#     R, arena_half, target_range = reacher_scale(lengths, arena_margin=arena_margin, target_ratio=target_ratio)
+
+#     # 🚀 动态计算柱子位置：永远卡在机械臂活动范围的右上方 60% 处
+#     obs_x = target_range * 0.6
+#     obs_y = target_range * 0.6
+#     obs_radius = max(0.015, R * 0.05) # 柱子粗细也稍微跟着手臂长度适配一下
+
+#     pieces = [
+#         xml_header(model_name), xml_compiler(), xml_default(), xml_option(),
+#         xml_arena(arena_half=arena_half)
+#     ]
+#     arm_xml, joint_names = xml_arm_chain(lengths=lengths, link_radius=link_radius, fingertip_radius=fingertip_radius, joint_range=joint_range)
+#     # pieces.extend([arm_xml, xml_target(target_range=target_range), "  </worldbody>\n", xml_actuators(joint_names, ctrlrange=ctrlrange, gear=gear), "</mujoco>\n"])
+
+#     pieces.extend([
+#         arm_xml, 
+#         xml_target(target_range=target_range), 
+#         # xml_obstacle(pos_x=obs_x, pos_y=obs_y, radius=obs_radius), # 设定在右上方必经之路
+#         xml_obstacle_array(target_range=target_range, R=R), # 设定在右上方必经之路
+#         "  </worldbody>\n", 
+#         xml_actuators(joint_names, ctrlrange=ctrlrange, gear=gear), 
+#         "</mujoco>\n"
+#     ])
+#     return "".join(pieces)
 
 # ==========================================
 # 🧬 第二部分：环境与进化逻辑
@@ -193,8 +290,8 @@ def make_evo_env(lengths, render_mode=None):
         link_radius=0.015,
         joint_range=(-2.2, 2.2), # 防止过度折叠
         gear=40.0,               # 降低马力，防止速度过快引发隧穿
-        arena_margin=1.35,  
-        target_ratio=0.9,
+        # arena_margin=1.35,  
+        # target_ratio=0.9,
     )
     
     with open(xml_filename, "w") as f:
@@ -242,8 +339,8 @@ def calculate_fitness(individual, model, n_episodes=3):
             done = done_arr[0]
             
     venv.close()
-    # 复杂度奖金：鼓励长出新关节，对抗动作惩罚
-    return (total_reward / n_episodes) + (individual.n_joints * 3.0)
+    # 复杂度奖金：鼓励长出新关节，对抗动作惩罚，把3改成0.5，减少疯狂增加新关节数的奖励
+    return (total_reward / n_episodes) + (individual.n_joints * 0.5)
 
 # ==========================================
 # 🚀 第三部分：达尔文大循环！
@@ -257,19 +354,21 @@ if __name__ == "__main__":
 
     temp_env = DummyVecEnv([make_evo_env([0.10])])
     print(f"🧠 1. 加载第一级火箭：基础大脑 ({PRETRAINED_MODEL_PATH})...")
-    gcn_model = SAC.load(PRETRAINED_MODEL_PATH, env=temp_env, device="auto")
+    gcn_model = SAC.load(PRETRAINED_MODEL_PATH, env=temp_env, device="auto", tensorboard_log="./tb_logs_obstacle/co_evolution")
     temp_env.close()
     
     # --------------------------------------------------
     # 🧪 测试专用参数 (Dry Run) —— 测试无误后请改回原值！
     # --------------------------------------------------
     POPULATION_SIZE = 30     # 原值: 30
-    GENERATIONS = 50        # 原值: 50
+    GENERATIONS = 10        # 原值: 50
     ELITE_K = 5             # 原值: 5
     RL_STEPS_PER_GEN = 15000 # 原值: 15000 
     
-    population = [RobotIndividual([random.choice([0.05, 0.10, 0.15]) for _ in range(random.randint(1, 4))]) for _ in range(POPULATION_SIZE)]
-    evo_ckpt_dir = "./checkpoints/co_evolution"
+    # population = [RobotIndividual([random.choice([0.05, 0.10, 0.15]) for _ in range(random.randint(1, 4))]) for _ in range(POPULATION_SIZE)]
+    # 让初始物种拥有 3 到 6 个关节，这样它们的初始臂长更接近 0.5m 的任务需求
+    population = [RobotIndividual([random.choice([0.10, 0.15]) for _ in range(random.randint(3, 6))]) for _ in range(POPULATION_SIZE)]
+    evo_ckpt_dir = "./checkpoints_obstacle/co_evolution"
     os.makedirs(evo_ckpt_dir, exist_ok=True)
     
     # 🚀 记录仪初始化：记录历史最高分
@@ -297,7 +396,7 @@ if __name__ == "__main__":
         is_new_record = best_individual.fitness > global_best_fitness
         
         if is_milestone or is_new_record:
-            milestone_dir = "./checkpoints/evolution_milestones"
+            milestone_dir = "./checkpoints_obstacle/evolution_milestones"
             os.makedirs(milestone_dir, exist_ok=True)
             
             if is_new_record:
@@ -315,8 +414,8 @@ if __name__ == "__main__":
                 link_radius=0.015,
                 joint_range=(-2.2, 2.2),
                 gear=40.0,
-                arena_margin=1.35,
-                target_ratio=0.9
+                # arena_margin=1.35,
+                # target_ratio=0.9
             )
             with open(os.path.join(milestone_dir, f"{specimen_name}.xml"), "w") as f:
                 f.write(xml_str)
@@ -330,19 +429,19 @@ if __name__ == "__main__":
             print(f"   [💾 已存档] 霸主数据已写入化石库: {specimen_name}")
         # ==================================================
 
-        # if gen % 10 == 0:
-        #     print(f"📺 正在开启第 {gen+1} 代霸主阅兵模式...")
-        #     # 使用 render_mode="human" 创建一个临时环境跑一回合
-        #     eval_env_fn = make_evo_env(best_individual.lengths, render_mode="human")
-        #     eval_env = eval_env_fn()
+        if gen % 5 == 0:
+            print(f"📺 正在开启第 {gen+1} 代霸主阅兵模式...")
+            # 使用 render_mode="human" 创建一个临时环境跑一回合
+            eval_env_fn = make_evo_env(best_individual.lengths, render_mode="human")
+            eval_env = eval_env_fn()
             
-        #     obs, _ = eval_env.reset()
-        #     for _ in range(MAX_EPISODE_STEPS):
-        #         action, _ = gcn_model.predict(obs, deterministic=True)
-        #         obs, reward, terminated, truncated, _ = eval_env.step(action)
-        #         time.sleep(0.02) # 让动作慢下来，接近 50FPS 的视觉效果
-        #         if terminated or truncated: break
-        #     eval_env.close()
+            obs, _ = eval_env.reset()
+            for _ in range(MAX_EPISODE_STEPS):
+                action, _ = gcn_model.predict(obs, deterministic=True)
+                obs, reward, terminated, truncated, _ = eval_env.step(action)
+                time.sleep(0.02) # 让动作慢下来，接近 50FPS 的视觉效果
+                if terminated or truncated: break
+            eval_env.close()
 
         print(f"⚡ 触发内环共同进化：大脑开始在线轮流适应新一代精锐...")
         env_fns = [make_evo_env(elite.lengths) for elite in elites]

@@ -31,10 +31,22 @@
     </body>
     </body>
     </body>
-    <body name="target" pos="-0.2135 -0.0225 0.01">
-      <joint name="target_x" type="slide" axis="1 0 0" limited="true" range="-0.27 0.27" ref="-0.2135" damping="0" armature="0" stiffness="0"/>
-      <joint name="target_y" type="slide" axis="0 1 0" limited="true" range="-0.27 0.27" ref="-0.0225" damping="0" armature="0" stiffness="0"/>
+    <body name="target" pos="0.0399 0.2214 0.01">
+      <joint name="target_x" type="slide" axis="1 0 0" limited="true" range="-0.27 0.27" ref="0.0399" damping="0" armature="0" stiffness="0"/>
+      <joint name="target_y" type="slide" axis="0 1 0" limited="true" range="-0.27 0.27" ref="0.2214" damping="0" armature="0" stiffness="0"/>
       <geom name="target" type="sphere" size="0.02" rgba="0.9 0.2 0.2 1" pos="0 0 0" contype="0" conaffinity="0"/>
+    </body>
+    <body name="obstacle_0" pos="0.1050 0.1050 0.01">
+      <geom name="obs_geom_0" type="cylinder" size="0.0150 0.1" rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>
+    </body>
+    <body name="obstacle_1" pos="-0.1050 0.1050 0.01">
+      <geom name="obs_geom_1" type="cylinder" size="0.0150 0.1" rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>
+    </body>
+    <body name="obstacle_2" pos="-0.1050 -0.1050 0.01">
+      <geom name="obs_geom_2" type="cylinder" size="0.0150 0.1" rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>
+    </body>
+    <body name="obstacle_3" pos="0.1050 -0.1050 0.01">
+      <geom name="obs_geom_3" type="cylinder" size="0.0150 0.1" rgba="0.2 0.8 0.2 1" contype="1" conaffinity="1"/>
     </body>
   </worldbody>
   <actuator>
