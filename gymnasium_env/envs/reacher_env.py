@@ -31,6 +31,11 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
             # 强制结束当前回合，并给予极端扣分，防止物理引擎崩溃
             return observation, -100.0, True, False, {"dist": self._get_dist()}
         
+        if dist < 0.05:
+            reward += 50.0  # 突破迷宫的终极奖励
+            if self.render_mode == "human": self.render()
+            return observation, reward, True, False, reward_info
+        
         if self.render_mode == "human": self.render()
         
         # 正常情况下，必须走满回合，培养平稳控制
@@ -44,7 +49,7 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         reward_dist = -dist 
         
         # 放大惩罚，终结转圈
-        reward_ctrl = -0.1 * np.square(action).sum()
+        reward_ctrl = -0.3 * np.square(action).sum()
 
         reward = reward_dist + reward_ctrl
         return reward, {"dist": dist, "reward_dist": reward_dist, "reward_ctrl": reward_ctrl}
