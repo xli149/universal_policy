@@ -354,7 +354,7 @@ if __name__ == "__main__":
 
     temp_env = DummyVecEnv([make_evo_env([0.10])])
     print(f"🧠 1. 加载第一级火箭：基础大脑 ({PRETRAINED_MODEL_PATH})...")
-    gcn_model = SAC.load(PRETRAINED_MODEL_PATH, env=temp_env, device="auto", tensorboard_log="./tb_logs_obstacle/co_evolution")
+    gcn_model = SAC.load(PRETRAINED_MODEL_PATH, env=temp_env, device="auto", tensorboard_log="./tb_logs_obstacle_early_stop/co_evolution")
     temp_env.close()
     
     # --------------------------------------------------
@@ -368,7 +368,7 @@ if __name__ == "__main__":
     # population = [RobotIndividual([random.choice([0.05, 0.10, 0.15]) for _ in range(random.randint(1, 4))]) for _ in range(POPULATION_SIZE)]
     # 让初始物种拥有 3 到 6 个关节，这样它们的初始臂长更接近 0.5m 的任务需求
     population = [RobotIndividual([random.choice([0.10, 0.15]) for _ in range(random.randint(3, 6))]) for _ in range(POPULATION_SIZE)]
-    evo_ckpt_dir = "./checkpoints_obstacle/co_evolution"
+    evo_ckpt_dir = "./checkpoints_obstacle_early_stop/co_evolution"
     os.makedirs(evo_ckpt_dir, exist_ok=True)
     
     # 🚀 记录仪初始化：记录历史最高分
@@ -396,7 +396,7 @@ if __name__ == "__main__":
         is_new_record = best_individual.fitness > global_best_fitness
         
         if is_milestone or is_new_record:
-            milestone_dir = "./checkpoints_obstacle/evolution_milestones"
+            milestone_dir = "./checkpoints_obstacle_early_stop/evolution_milestones"
             os.makedirs(milestone_dir, exist_ok=True)
             
             if is_new_record:
