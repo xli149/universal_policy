@@ -46,9 +46,9 @@
     </body>
     </body>
     </body>
-    <body name="target" pos="0.1337 0.1211 0.01">
-      <joint name="target_x" type="slide" axis="1 0 0" limited="true" range="-0.5 0.5" ref="0.1337" damping="0" armature="0" stiffness="0"/>
-      <joint name="target_y" type="slide" axis="0 1 0" limited="true" range="-0.5 0.5" ref="0.1211" damping="0" armature="0" stiffness="0"/>
+    <body name="target" pos="-0.2922 0.0871 0.01">
+      <joint name="target_x" type="slide" axis="1 0 0" limited="true" range="-0.5 0.5" ref="-0.2922" damping="0" armature="0" stiffness="0"/>
+      <joint name="target_y" type="slide" axis="0 1 0" limited="true" range="-0.5 0.5" ref="0.0871" damping="0" armature="0" stiffness="0"/>
       <geom name="target" type="sphere" size="0.02" rgba="0.9 0.2 0.2 1" pos="0 0 0" contype="0" conaffinity="0"/>
     </body>
     <body name="obstacle_0" pos="0.1768 0.1768 0.01">
