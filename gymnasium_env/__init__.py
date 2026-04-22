@@ -15,3 +15,9 @@ register(
     id="gymnasium_env/Reacher2D-v5",
     entry_point="gymnasium_env.envs:ReacherEnv_v5"
 ) 
+
+register(
+
+    id="gymnasium_env/Ant-v0",
+    entry_point="gymnasium_env.envs:AntEnv"
+)
