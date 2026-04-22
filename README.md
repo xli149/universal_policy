@@ -1,34 +1,7 @@
-# Gymnasium Examples
-Some simple examples of Gymnasium environments and wrappers.
-For some explanations of these examples, see the [Gymnasium documentation](https://gymnasium.farama.org).
+# Darwinian Engine
 
-### Environments
-This repository hosts the examples that are shown [on the environment creation documentation](https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/).
-- `GridWorldEnv`: Simplistic implementation of gridworld environment
+<p align="center">
+  <img src="./images/outpu_evolution_tiny.gif" alt="Darwin Engine Multi-Morphology Evolution" width="800">
+</p>
 
-### Wrappers
-This repository hosts the examples that are shown [on wrapper documentation](https://gymnasium.farama.org/api/wrappers/).
-- `ClipReward`: A `RewardWrapper` that clips immediate rewards to a valid range
-- `DiscreteActions`: An `ActionWrapper` that restricts the action space to a finite subset
-- `RelativePosition`: An `ObservationWrapper` that computes the relative position between an agent and a target
-- `ReacherRewardWrapper`: Allow us to weight the reward terms for the reacher environment
-
-### Contributing
-If you would like to contribute, follow these steps:
-- Fork this repository
-- Clone your fork
-- Set up pre-commit via `pre-commit install`
-
-PRs may require accompanying PRs in [the documentation repo](https://github.com/Farama-Foundation/Gymnasium/tree/main/docs).
-
-
-## Installation
-
-To install your new environment, run the following commands:
-
-```{shell}
-cd gymnasium_env
-pip install -e .
-```
-
-# universal_policy
+This project introduces the "Darwinian Engine," a hybrid framework for the synchronous co-evolution of robot morphology (hardware) and control policies (software). By combining Graph Convolutional Networks (GCN) and Morphological Domain Randomization (MDR), the system trains an exceptionally robust "Generalist Brain." It can directly drive multi-legged robots with diverse topological structures (e.g., 4 to 8 legs, asymmetric limbs, odd or even configurations) entirely without the need to retrain the neural network from scratch.
